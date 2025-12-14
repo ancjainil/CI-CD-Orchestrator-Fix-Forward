@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SLO-Driven CI/CD Orchestrator</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #111827;
+      --muted: #94a3b8;
+      --accent: #22d3ee;
+      --accent-2: #a855f7;
+      --danger: #f43f5e;
+      --success: #22c55e;
+      --text: #e2e8f0;
+      --radius: 12px;
+      --shadow: 0 15px 60px rgba(0,0,0,0.35);
+      --font: "Inter", "SF Pro Text", system-ui, -apple-system, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at 20% 20%, rgba(34,211,238,0.07), transparent 30%),
+                  radial-gradient(circle at 80% 0%, rgba(168,85,247,0.08), transparent 25%),
+                  var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      padding: 32px;
+      min-height: 100vh;
+    }
+    h1 { margin: 0 0 6px 0; letter-spacing: -0.02em; }
+    .subtitle { color: var(--muted); margin-bottom: 24px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .card {
+      background: linear-gradient(145deg, rgba(17,24,39,0.95), rgba(17,24,39,0.85));
+      border: 1px solid rgba(255,255,255,0.04);
+      border-radius: var(--radius);
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
+    .card h3 { margin-top: 0; margin-bottom: 10px; }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      color: #0b1120;
+      font-weight: 600;
+    }
+    .tag.risk { background: linear-gradient(90deg, #f59e0b, #f43f5e); color: #0b1120; }
+    .tag.ok { background: linear-gradient(90deg, #10b981, #22d3ee); }
+    .meter {
+      height: 10px;
+      width: 100%;
+      background: rgba(255,255,255,0.06);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .meter .fill {
+      height: 100%;
+      background: linear-gradient(90deg, #22d3ee, #a855f7);
+      width: 50%;
+      transition: width 0.4s ease;
+    }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    ul { padding-left: 16px; margin: 0; color: var(--muted); }
+    .plan-step {
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.06);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .status { font-weight: 600; text-transform: capitalize; }
+    .status.pending { color: #f59e0b; }
+    .status.running { color: #22d3ee; }
+    .status.done { color: #22c55e; }
+    .status.blocked { color: #f43f5e; }
+    button {
+      background: linear-gradient(90deg, #22d3ee, #a855f7);
+      color: #0b1120;
+      font-weight: 700;
+      padding: 12px 16px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      box-shadow: 0 8px 30px rgba(168,85,247,0.35);
+      transition: transform 0.1s ease, box-shadow 0.1s ease;
+    }
+    button:hover { transform: translateY(-1px); box-shadow: 0 12px 32px rgba(168,85,247,0.45); }
+    button:active { transform: translateY(0); }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .muted { color: var(--muted); }
+    .pill {
+      padding: 6px 10px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.08);
+      font-size: 12px;
+    }
+    @media (max-width: 640px) {
+      body { padding: 20px; }
+      .row { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>SLO-Driven CI/CD Orchestrator</h1>
+    <div class="subtitle">Risk-scored rollouts with fix-forward automation and SLO guardrails.</div>
+    <div class="actions">
+      <button id="runPlan">Run Plan</button>
+      <button id="refresh">Refresh Memo</button>
+      <span class="pill">Backend: <span id="backendStatus">checking…</span></span>
+    </div>
+  </header>
+
+  <section class="grid">
+    <div class="card">
+      <div class="row">
+        <h3>Risk</h3>
+        <span id="riskTag" class="tag risk">--</span>
+      </div>
+      <div class="meter"><div id="riskMeter" class="fill" style="width: 0%;"></div></div>
+      <ul id="riskReasons"></ul>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <h3>SLO Budget</h3>
+        <span id="sloTag" class="tag ok">--</span>
+      </div>
+      <div class="meter"><div id="budgetMeter" class="fill" style="width: 0%;"></div></div>
+      <div class="muted" id="sloDetail"></div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <h3>Rollout Plan</h3>
+        <span class="pill" id="blockedBadge"></span>
+      </div>
+      <div id="rolloutPlan" class="muted"></div>
+    </div>
+  </section>
+
+  <section class="grid">
+    <div class="card">
+      <h3>Plan Steps</h3>
+      <div id="planSteps"></div>
+    </div>
+    <div class="card">
+      <h3>Actions Taken</h3>
+      <ul id="actionsList"></ul>
+    </div>
+  </section>
+
+  <script>
+    const apiBase = "http://127.0.0.1:8000";
+
+    const fallbackMemo = {
+      pr_number: 42,
+      repo: "acme/payments",
+      risk_score: 68,
+      risk_reasoning: ["Burn rate at 1.5x", "Touches rollout config", "Recent flakiness in integration tests"],
+      rollout_plan: "25% canary → pause 30m → 50% → pause 1h → 100%",
+      slo_snapshot: {
+        service: "payments",
+        error_budget_remaining: 0.72,
+        burn_rate: 1.5,
+        slo_target: "99.9% availability",
+        window: "30d"
+      },
+      actions_taken: ["rerun_tests"],
+      blocked: false
+    };
+
+    const fallbackPlan = [
+      { name: "Read PR diff", status: "done" },
+      { name: "Run targeted tests", status: "running" },
+      { name: "Query SLO burn", status: "pending" },
+      { name: "Select rollout", status: "pending" },
+      { name: "Post decision memo", status: "pending" }
+    ];
+
+    async function fetchJSON(path, opts = {}) {
+      try {
+        const res = await fetch(apiBase + path, opts);
+        if (!res.ok) throw new Error("bad status");
+        return await res.json();
+      } catch (e) {
+        console.warn("Falling back to mock for", path, e);
+        return null;
+      }
+    }
+
+    function setRisk(memo) {
+      const risk = memo.risk_score;
+      document.getElementById("riskTag").textContent = `${risk}/100`;
+      document.getElementById("riskMeter").style.width = `${risk}%`;
+      const reasons = document.getElementById("riskReasons");
+      reasons.innerHTML = "";
+      memo.risk_reasoning.forEach(r => {
+        const li = document.createElement("li");
+        li.textContent = r;
+        reasons.appendChild(li);
+      });
+    }
+
+    function setSLO(slo) {
+      const tag = document.getElementById("sloTag");
+      tag.textContent = `${Math.round(slo.error_budget_remaining * 100)}% budget`;
+      document.getElementById("budgetMeter").style.width = `${slo.error_budget_remaining * 100}%`;
+      document.getElementById("sloDetail").textContent = `${slo.slo_target} • ${slo.window} window • Burn ${slo.burn_rate}x`;
+    }
+
+    function setRollout(memo) {
+      const badge = document.getElementById("blockedBadge");
+      badge.textContent = memo.blocked ? "Blocked: high risk / low budget" : "Proceed with guardrails";
+      badge.style.color = memo.blocked ? "#f43f5e" : "#22d3ee";
+      document.getElementById("rolloutPlan").textContent = memo.rollout_plan;
+    }
+
+    function renderPlan(plan) {
+      const container = document.getElementById("planSteps");
+      container.innerHTML = "";
+      plan.forEach(step => {
+        const div = document.createElement("div");
+        div.className = "plan-step";
+        div.innerHTML = `<span>${step.name}</span><span class="status ${step.status}">${step.status}</span>`;
+        container.appendChild(div);
+      });
+    }
+
+    function renderActions(actions) {
+      const ul = document.getElementById("actionsList");
+      ul.innerHTML = "";
+      if (!actions.length) {
+        const li = document.createElement("li");
+        li.textContent = "No actions taken.";
+        ul.appendChild(li);
+        return;
+      }
+      actions.forEach(a => {
+        const li = document.createElement("li");
+        li.textContent = a;
+        ul.appendChild(li);
+      });
+    }
+
+    async function loadMemo() {
+      const memo = await fetchJSON("/api/decision-memo") || fallbackMemo;
+      setRisk(memo);
+      setSLO(memo.slo_snapshot);
+      setRollout(memo);
+      renderActions(memo.actions_taken);
+    }
+
+    async function runPlan() {
+      const res = await fetchJSON("/api/run-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pr_number: 42, repo: "acme/payments", allow_autofix: true })
+      });
+      if (res && res.decision) {
+        setRisk(res.decision);
+        setSLO(res.decision.slo_snapshot);
+        setRollout(res.decision);
+      }
+      renderPlan(res?.plan || fallbackPlan);
+    }
+
+    async function checkBackend() {
+      const statusEl = document.getElementById("backendStatus");
+      const ok = await fetchJSON("/health");
+      statusEl.textContent = ok ? "online" : "mock mode";
+      statusEl.style.color = ok ? "#22c55e" : "#f59e0b";
+    }
+
+    document.getElementById("runPlan").addEventListener("click", runPlan);
+    document.getElementById("refresh").addEventListener("click", loadMemo);
+
+    // Initial load
+    loadMemo();
+    renderPlan(fallbackPlan);
+    checkBackend();
+  </script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+version: "3.9"
+services:
+  api:
+    build: ./backend
+    environment:
+      - SLO_DATABASE_URL=postgresql+psycopg_async://postgres:postgres@postgres:5432/slo
+      - SLO_REDIS_URL=redis://redis:6379/0
+      - SLO_PROM_BASE_URL=http://prometheus:9090
+      - SLO_PROM_MOCK=true
+      - SLO_GITHUB_WEBHOOK_SECRET=dev-secret
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+  worker:
+    build: ./backend
+    command: celery -A app.tasks worker --loglevel=info
+    environment:
+      - SLO_DATABASE_URL=postgresql+psycopg_async://postgres:postgres@postgres:5432/slo
+      - SLO_REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+      - postgres
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: slo
+    ports:
+      - "5432:5432"
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+  prometheus:
+    image: prom/prometheus
+    command: ["--config.file=/etc/prometheus/prometheus.yml"]
+    volumes:
+      - ./prometheus-mock.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
