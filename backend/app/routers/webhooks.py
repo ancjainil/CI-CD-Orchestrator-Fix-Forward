@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import get_settings
 from ..db import get_session
-from ..models import AgentRun, PullRequest, Repo, WorkflowRun
+from ..models import AgentRun, Installation, PullRequest, Repo, WorkflowRun
 from ..services.github_client import verify_signature
 
 router = APIRouter()
@@ -27,12 +27,34 @@ async def github_webhook(
     payload = await request.json()
     repo_full = payload.get("repository", {}).get("full_name", "unknown/unknown")
     pr_number = payload.get("pull_request", {}).get("number")
+    installation_id = payload.get("installation", {}).get("id")
+
+    installation = None
+    if installation_id:
+        result_inst = await session.execute(
+            select(Installation).where(Installation.github_installation_id == installation_id)
+        )
+        installation = result_inst.scalar_one_or_none()
+        if not installation:
+            installation = Installation(
+                github_installation_id=installation_id,
+                account_login=payload.get("sender", {}).get("login", "unknown"),
+            )
+            session.add(installation)
+            await session.flush()
+
     result = await session.execute(select(Repo).where(Repo.full_name == repo_full))
     repo = result.scalar_one_or_none()
     if not repo:
-        repo = Repo(full_name=repo_full, installation_id=None, default_branch="main")
+        repo = Repo(
+            full_name=repo_full,
+            installation_id=installation.id if installation else None,
+            default_branch="main",
+        )
         session.add(repo)
         await session.flush()
+    elif installation and repo.installation_id != installation.id:
+        repo.installation_id = installation.id
 
     event_record = WorkflowRun(
         repo_id=repo.id,

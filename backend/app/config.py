@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     github_app_id: str = "local-app"
     github_app_private_key: str = "changeme"
     github_webhook_secret: str = "dev-secret"
+    github_installation_id: int | None = None
     github_oauth_client_id: str | None = None
     github_oauth_client_secret: str | None = None
 
