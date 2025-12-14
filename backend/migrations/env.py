@@ -1,4 +1,6 @@
 from logging.config import fileConfig
+import asyncio
+import sys
 
 from alembic import context
 from sqlalchemy import pool
@@ -18,6 +20,10 @@ target_metadata = Base.metadata
 
 settings = get_settings()
 config.set_main_option("sqlalchemy.url", settings.database_url)
+
+# On Windows, force selector event loop for psycopg async
+if sys.platform.startswith("win") and hasattr(asyncio, "WindowsSelectorEventLoopPolicy"):
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 
 def run_migrations_offline():
