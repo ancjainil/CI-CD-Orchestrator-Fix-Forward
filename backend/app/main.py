@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
 from .logging_config import setup_logging
-from .routers import agent_runs, health, prs, repos, stream, webhooks
+from .routers import agent_runs, health, oauth, prs, repos, stream, webhooks
 
 
 def create_app() -> FastAPI:
@@ -16,6 +16,7 @@ def create_app() -> FastAPI:
     app.include_router(repos.router)
     app.include_router(prs.router)
     app.include_router(agent_runs.router)
+    app.include_router(oauth.router)
     app.include_router(stream.router)
 
     app.add_middleware(

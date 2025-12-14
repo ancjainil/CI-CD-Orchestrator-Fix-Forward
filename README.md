@@ -58,3 +58,4 @@ Notes
 - GitHub and Prometheus clients are stubbed; wire real tokens/queries to go beyond mock mode.
 - Use Python 3.11 to avoid building pydantic-core from source on unsupported versions.
 - Frontend falls back to fixtures if the API is unreachable.
+- For OAuth login: set `NEXT_PUBLIC_GITHUB_CLIENT_ID` and `NEXT_PUBLIC_APP_URL`, and configure GitHub App redirect to `/oauth/callback`.
